@@ -8,6 +8,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.net.Uri;
 import android.os.Environment;
 import android.os.IBinder;
 import android.support.annotation.Nullable;
@@ -55,6 +56,10 @@ public class TaskService extends Service {
      * 下载是否可取消
      */
     private Callback.Cancelable cancelable;
+    /**
+     * 自定义保存路径，Environment.getExternalStorageDirectory()：SD卡的根目录
+     */
+    private String filePath = Environment.getExternalStorageDirectory() + "/ServiceTask/";
 
     /**
      * 通知栏操作的四种状态
@@ -169,21 +174,20 @@ public class TaskService extends Service {
      * 下载文件
      */
     private void download() {
-        String url = "https://github.com/linglongxin24/ToolSoftware/raw/master/Android/navicat110_premium_cs_11.0.19.rar";
+        String url = "https://github.com/linglongxin24/DylanStepCount/raw/master/app-debug.apk";
         RequestParams requestParams = new RequestParams(url);
-        /**自定义保存路径，Environment.getExternalStorageDirectory()：SD卡的根目录**/
-        requestParams.setSaveFilePath(Environment.getExternalStorageDirectory() + "/ServiceTask/");
+        requestParams.setSaveFilePath(filePath);
         /**自动为文件命名**/
         requestParams.setAutoRename(true);
         /**自动为文件断点续传**/
         requestParams.setAutoResume(true);
-
         showFileName(url);
 
-        cancelable = x.http().post(requestParams, new Callback.ProgressCallback<File>() {
+        cancelable = x.http().get(requestParams, new Callback.ProgressCallback<File>() {
             @Override
             public void onSuccess(File result) {
                 Logger.d("下载完成");
+                Logger.d("result="+result.getPath());
                 downloadSuccess();
             }
 
@@ -265,6 +269,8 @@ public class TaskService extends Service {
         mRemoteViews.setTextViewText(R.id.bt, "完成");
         mRemoteViews.setTextViewText(R.id.tv_message, "下载完成");
         notificationManager.notify(NOTIFICATION_ID, notification);
+        //这个广播的目的就是更新图库，发了这个广播进入相册就可以找到你保存的图片了！，记得要传你更新的file哦
+        sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, Uri.parse("file://" + filePath)));
     }
 
     /**
