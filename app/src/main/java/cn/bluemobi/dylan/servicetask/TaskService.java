@@ -8,7 +8,6 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.net.Uri;
 import android.os.Environment;
 import android.os.IBinder;
 import android.support.annotation.Nullable;
@@ -60,6 +59,7 @@ public class TaskService extends Service {
      * 自定义保存路径，Environment.getExternalStorageDirectory()：SD卡的根目录
      */
     private String filePath = Environment.getExternalStorageDirectory() + "/ServiceTask/";
+    private File file;
 
     /**
      * 通知栏操作的四种状态
@@ -83,14 +83,114 @@ public class TaskService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        /****注册广播**/
+        registerBroadCast();
+        download();
+        return super.onStartCommand(intent, flags, startId);
+    }
+
+    /**
+     * 注册按钮点击广播*
+     */
+    private void registerBroadCast() {
         myBroadcastReceiver = new MyBroadcastReceiver();
         IntentFilter filter = new IntentFilter();
         filter.addAction(BROADCAST_ACTION_CLICK);
         registerReceiver(myBroadcastReceiver, filter);
+    }
+
+
+    /**
+     * 更新通知界面的按钮的广播
+     */
+    private class MyBroadcastReceiver extends BroadcastReceiver {
+
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (!intent.getAction().equals(BROADCAST_ACTION_CLICK)) {
+                return;
+            }
+            Logger.d("status=" + status);
+            switch (status) {
+                case DOWNLOADING:
+                    /**当在下载中点击暂停按钮**/
+                    cancelable.cancel();
+                    mRemoteViews.setTextViewText(R.id.bt, "下载");
+                    mRemoteViews.setTextViewText(R.id.tv_message, "暂停中...");
+                    status = Status.PAUSE;
+                    notificationManager.notify(NOTIFICATION_ID, notification);
+                    break;
+                case SUCCESS:
+                    /**当下载完成点击完成按钮时关闭通知栏**/
+                    notificationManager.cancel(NOTIFICATION_ID);
+                    break;
+                case FAIL:
+                case PAUSE:
+                    /**当在暂停时点击下载按钮**/
+                    download();
+                    mRemoteViews.setTextViewText(R.id.bt, "暂停");
+                    mRemoteViews.setTextViewText(R.id.tv_message, "下载中...");
+                    status = Status.DOWNLOADING;
+                    notificationManager.notify(NOTIFICATION_ID, notification);
+                    break;
+            }
+        }
+    }
+
+    /**
+     * 下载文件
+     */
+    private void download() {
+        final String url = "https://github.com/linglongxin24/DylanStepCount/raw/master/app-debug.apk";
+        RequestParams requestParams = new RequestParams(url);
+        String fileName = url.substring(url.lastIndexOf("/") + 1);
+        file = new File(filePath, fileName);
         showNotificationProgress(TaskService.this);
-        download();
-        return super.onStartCommand(intent, flags, startId);
+        showFileName(fileName);
+        requestParams.setSaveFilePath(file.getPath());
+        /**自动为文件命名**/
+        requestParams.setAutoRename(true);
+        /**自动为文件断点续传**/
+        requestParams.setAutoResume(true);
+
+        cancelable = x.http().get(requestParams, new Callback.ProgressCallback<File>() {
+            @Override
+            public void onSuccess(File result) {
+                Logger.d("下载完成");
+                Logger.d("result=" + result.getPath());
+                downloadSuccess();
+            }
+
+            @Override
+            public void onError(Throwable ex, boolean isOnCallback) {
+                Logger.d("下载异常");
+                downloadFail();
+            }
+
+            @Override
+            public void onCancelled(CancelledException cex) {
+                Logger.d("下载已取消");
+            }
+
+            @Override
+            public void onFinished() {
+
+            }
+
+            @Override
+            public void onWaiting() {
+
+            }
+
+            @Override
+            public void onStarted() {
+            }
+
+            @Override
+            public void onLoading(long total, long current, boolean isDownloading) {
+                Logger.d("total=" + total + "--" + "current=" + current);
+                updateNotification(total, current);
+            }
+        });
     }
 
     /**
@@ -133,96 +233,6 @@ public class TaskService extends Service {
         notificationManager.notify(NOTIFICATION_ID, notification);
     }
 
-
-    /**
-     * 更新通知界面的按钮的广播
-     */
-    private class MyBroadcastReceiver extends BroadcastReceiver {
-
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            if (!intent.getAction().equals(BROADCAST_ACTION_CLICK)) {
-                return;
-            }
-            switch (status) {
-                case DOWNLOADING:
-                    /**当在下载中点击暂停按钮**/
-                    cancelable.cancel();
-                    mRemoteViews.setTextViewText(R.id.bt, "下载");
-                    mRemoteViews.setTextViewText(R.id.tv_message, "暂停中...");
-                    status = Status.PAUSE;
-                    notificationManager.notify(NOTIFICATION_ID, notification);
-                    break;
-                case SUCCESS:
-                    /**当下载完成点击完成按钮时关闭通知栏**/
-                    notificationManager.cancel(NOTIFICATION_ID);
-                    break;
-                case FAIL:
-                case PAUSE:
-                    /**当在暂停时点击下载按钮**/
-                    download();
-                    mRemoteViews.setTextViewText(R.id.bt, "暂停");
-                    mRemoteViews.setTextViewText(R.id.tv_message, "下载中...");
-                    status = Status.DOWNLOADING;
-                    notificationManager.notify(NOTIFICATION_ID, notification);
-                    break;
-            }
-        }
-    }
-
-    /**
-     * 下载文件
-     */
-    private void download() {
-        String url = "https://github.com/linglongxin24/DylanStepCount/raw/master/app-debug.apk";
-        RequestParams requestParams = new RequestParams(url);
-        requestParams.setSaveFilePath(filePath);
-        /**自动为文件命名**/
-        requestParams.setAutoRename(true);
-        /**自动为文件断点续传**/
-        requestParams.setAutoResume(true);
-        showFileName(url);
-
-        cancelable = x.http().get(requestParams, new Callback.ProgressCallback<File>() {
-            @Override
-            public void onSuccess(File result) {
-                Logger.d("下载完成");
-                Logger.d("result="+result.getPath());
-                downloadSuccess();
-            }
-
-            @Override
-            public void onError(Throwable ex, boolean isOnCallback) {
-                Logger.d("下载异常");
-                downloadFail();
-            }
-
-            @Override
-            public void onCancelled(CancelledException cex) {
-                Logger.d("下载已取消");
-            }
-
-            @Override
-            public void onFinished() {
-
-            }
-
-            @Override
-            public void onWaiting() {
-
-            }
-
-            @Override
-            public void onStarted() {
-            }
-
-            @Override
-            public void onLoading(long total, long current, boolean isDownloading) {
-                Logger.d("total=" + total + "--" + "current=" + current);
-                updateNotification(total, current);
-            }
-        });
-    }
 
     /**
      * 在通知栏显示文件名
@@ -269,8 +279,6 @@ public class TaskService extends Service {
         mRemoteViews.setTextViewText(R.id.bt, "完成");
         mRemoteViews.setTextViewText(R.id.tv_message, "下载完成");
         notificationManager.notify(NOTIFICATION_ID, notification);
-        //这个广播的目的就是更新图库，发了这个广播进入相册就可以找到你保存的图片了！，记得要传你更新的file哦
-        sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, Uri.parse("file://" + filePath)));
     }
 
     /**

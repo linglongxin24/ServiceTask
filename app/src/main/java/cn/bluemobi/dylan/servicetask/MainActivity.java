@@ -12,7 +12,5 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         Intent intent = new Intent(this, TaskService.class);
         startService(intent);
-//        startService(intent);
-//        stopService(intent);
     }
 }
