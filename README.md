@@ -1,6 +1,8 @@
 
 >在Android开发中，我们经常会用到例如版本更新这种的文件下载，那么如何用service+notification去做一个支持断点续传的
-文件下载呢？
+文件下载呢？效果图如下
+
+![效果图](https://github.com/linglongxin24/ServiceTask/blob/master/screenshot/device-2016-12-20-175128.mp4_1482227736.gif?raw=true)
 
 #一.在启动Activity中启动Service
 
